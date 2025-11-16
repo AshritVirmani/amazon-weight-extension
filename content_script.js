@@ -12,54 +12,55 @@ async function handleFillWeights() {
     const dimensions = { length: '32', width: '24', height: '2.5' };
     const weightValue = '410';
 
-    // Track processed elements to avoid double-counting
-    const processedWeightElements = new Set();
-    const processedDimensionElements = new Set();
-
-    // A more resilient selector strategy
+    // Collect ALL weight elements first, then deduplicate
     const weightSelectors = [
         'kat-input[unique-id*="katal-id-"]',
         'kat-input[data-testid*="weight"]',
     ];
+    
+    const allWeightElements = new Set();
+    for (const selector of weightSelectors) {
+        const elements = findAllElements(selector);
+        elements.forEach(el => allWeightElements.add(el));
+    }
+
+    // Process each unique weight element only once
+    for (const el of allWeightElements) {
+        const testId = (el.getAttribute('data-testid') || '').toLowerCase();
+        // Ensure it's not a dimension field
+        if (!testId.includes('length') && !testId.includes('width') && !testId.includes('height')) {
+            const input = getInputFromKatInput(el);
+            if (setInputValue(input, weightValue, el)) {
+                weightCount++;
+                await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
+            }
+        }
+    }
+
+    // Collect ALL dimension elements first, then deduplicate
     const dimensionSelectors = {
         length: 'kat-input[data-testid="length-input"]',
         width: 'kat-input[data-testid="width-input"]',
         height: 'kat-input[data-testid="height-input"]',
     };
-
-    // Find and fill weight fields - avoid double-counting
-    for (const selector of weightSelectors) {
-        const elements = findAllElements(selector);
-        for (const el of elements) {
-            // Skip if we've already processed this element
-            if (processedWeightElements.has(el)) continue;
-            
-            const testId = (el.getAttribute('data-testid') || '').toLowerCase();
-            // Ensure it's not a dimension field
-            if (!testId.includes('length') && !testId.includes('width') && !testId.includes('height')) {
-                const input = getInputFromKatInput(el);
-                if (setInputValue(input, weightValue, el)) {
-                    processedWeightElements.add(el);
-                    weightCount++;
-                    await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
-                }
-            }
-        }
-    }
-
-    // Find and fill dimension fields - avoid double-counting
+    
+    const allDimensionElements = new Map(); // Map<element, dimensionType>
     for (const [key, selector] of Object.entries(dimensionSelectors)) {
         const elements = findAllElements(selector);
-        for (const el of elements) {
-            // Skip if we've already processed this element
-            if (processedDimensionElements.has(el)) continue;
-            
-            const input = getInputFromKatInput(el);
-            if (setInputValue(input, dimensions[key], el)) {
-                processedDimensionElements.add(el);
-                dimensionCount++;
-                await new Promise(resolve => setTimeout(resolve, 50));
+        elements.forEach(el => {
+            // Only add if not already processed
+            if (!allDimensionElements.has(el)) {
+                allDimensionElements.set(el, key);
             }
+        });
+    }
+
+    // Process each unique dimension element only once
+    for (const [el, dimensionType] of allDimensionElements.entries()) {
+        const input = getInputFromKatInput(el);
+        if (setInputValue(input, dimensions[dimensionType], el)) {
+            dimensionCount++;
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
     }
     
