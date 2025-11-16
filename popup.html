@@ -1,55 +1,113 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Weight Filler</title>
+  <title>Seller Ship Assist</title>
   <style>
+    :root {
+      --bg-color: #f8f9fa;
+      --text-color: #212529;
+      --primary-color: #007bff;
+      --primary-hover-color: #0056b3;
+      --secondary-color: #6c757d;
+      --secondary-hover-color: #5a6268;
+      --border-color: #dee2e6;
+      --success-color: #28a745;
+      --error-color: #dc3545;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      width: 250px;
-      padding: 15px;
-      text-align: center;
-      background-color: #f3f3f3;
+      width: 280px;
+      padding: 0;
+      margin: 0;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+    }
+    .header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
     }
     h3 {
-      margin-top: 0;
-      color: #111;
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      text-align: center;
+    }
+    .content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
     button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
       width: 100%;
-      padding: 12px;
-      font-size: 16px;
-      cursor: pointer;
-      background-color: #f0c14b;
-      border: 1px solid #a88734;
-      border-radius: 8px;
-      color: #111;
+      padding: 10px 12px;
+      font-size: 14px;
       font-weight: 500;
-      transition: background-color 0.2s;
+      cursor: pointer;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      transition: background-color 0.2s, border-color 0.2s;
     }
-    button:hover {
-      background-color: #e4b33b;
+    button svg {
+      width: 16px;
+      height: 16px;
     }
-    button.secondary {
-      background-color: #ff6b6b;
-      border: 1px solid #d63031;
-      margin-top: 10px;
+    .primary {
+      background-color: var(--primary-color);
+      border-color: var(--primary-color);
+      color: white;
     }
-    button.secondary:hover {
-      background-color: #ee5a6f;
+    .primary:hover {
+      background-color: var(--primary-hover-color);
+      border-color: var(--primary-hover-color);
+    }
+    .secondary {
+      background-color: transparent;
+      border-color: var(--border-color);
+      color: var(--text-color);
+    }
+    .secondary:hover {
+      background-color: var(--secondary-color);
+      border-color: var(--secondary-color);
+      color: white;
     }
     #status {
-      margin-top: 15px;
-      font-size: 14px;
-      min-height: 20px;
-      color: #333;
+      margin-top: 8px;
+      font-size: 13px;
+      min-height: 18px;
+      text-align: center;
+      color: var(--secondary-color);
+    }
+    #status.success {
+      color: var(--success-color);
+    }
+    #status.error {
+      color: var(--error-color);
     }
   </style>
 </head>
 <body>
-  <h3>Amazon Weight & Dimensions</h3>
-  <button id="fillWeightsBtn">Fill Weights & Dimensions</button>
-  <button id="highlightAnomaliesBtn" class="secondary">Highlight Anomalies</button>
-  <button id="highlightAnomaliesOrdersBtn" class="secondary">Highlight Anomalies (Orders Page)</button>
+  <div class="header">
+    <h3>Seller Ship Assist</h3>
+  </div>
+  <div class="content">
+    <button id="fillWeightsBtn" class="primary">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 22.5l-.648-1.938a3.375 3.375 0 00-2.684-2.684L11.25 18l1.938-.648a3.375 3.375 0 002.684-2.684L16.25 13.5l.648 1.938a3.375 3.375 0 002.684 2.684L21.75 18l-1.938.648a3.375 3.375 0 00-2.684 2.684z" /></svg>
+      Quick-Fill Package Data
+    </button>
+    <button id="highlightAnomaliesBtn" class="secondary">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.35 3.836c-.065.21.065.433.288.433h.084c.224 0 .353-.223.288-.433A5.991 5.991 0 0012 3c-.347 0-.69.055-1.026.164a6.002 6.002 0 00-.624.672zM16.026 5.026A6.002 6.002 0 0012 3v1.942a4.004 4.004 0 013.235.803l.79-1.718zM12 21c.347 0 .69-.055 1.026-.164a6.002 6.002 0 00.624-.672c.065-.21-.065-.433-.288-.433h-.084c-.224 0-.353.223-.288.433A5.991 5.991 0 0012 21zm-4.026-1.026A6.002 6.002 0 0012 21v-1.942a4.004 4.004 0 01-3.235-.803l-.79 1.718zM12 18a6 6 0 100-12 6 6 0 000 12z" /></svg>
+      Scan Shipments for Review
+    </button>
+    <button id="highlightAnomaliesOrdersBtn" class="secondary">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+      Scan Orders for Review
+    </button>
+  </div>
   <div id="status"></div>
   <script src="popup.js"></script>
 </body>

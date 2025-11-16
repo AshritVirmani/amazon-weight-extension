@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Amazon Weight & Dimensions Filler",
+  "name": "Seller Ship Assist",
   "version": "2.0",
-  "description": "Fills weight (410g) and package dimensions (length, width, height) for Amazon orders.",
+  "description": "Quickly fill package weight and dimensions, and scan for shipping anomalies on Amazon Seller Central.",
   "permissions": [
     "scripting",
     "activeTab"

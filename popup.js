@@ -1,6 +1,9 @@
 // Helper to display status messages in the popup
-function setStatus(message) {
-    document.getElementById('status').textContent = message;
+function setStatus(message, isError = false) {
+    const statusDiv = document.getElementById('status');
+    statusDiv.textContent = message;
+    statusDiv.classList.toggle('error', isError);
+    statusDiv.classList.toggle('success', !isError && message.startsWith('Updated') || message.startsWith('Highlighted'));
 }
 
 // Helper to send a message to the content script and handle the response
@@ -11,7 +14,7 @@ async function sendMessageToContentScript(action) {
         
         // Check if the tab is an Amazon Seller Central page
         if (!tab.url || !tab.url.startsWith('https://sellercentral.amazon.')) {
-            setStatus('Error: Not an Amazon Seller Central page.');
+            setStatus('Error: Not an Amazon Seller Central page.', true);
             return;
         }
 
@@ -19,7 +22,7 @@ async function sendMessageToContentScript(action) {
         
         if (response) {
             if (response.error) {
-                setStatus(`Error: ${response.error}`);
+                setStatus(`Error: ${response.error}`, true);
             } else {
                 // Handle different successful responses
                 if (action === 'fillWeights') {
@@ -34,13 +37,13 @@ async function sendMessageToContentScript(action) {
             }
         } else {
             // This can happen if the content script is not injected yet.
-            setStatus('Error: Could not connect to the page. Try reloading the tab.');
+            setStatus('Error: Could not connect to the page. Try reloading the tab.', true);
             if (chrome.runtime.lastError) {
                 console.error('Error sending message:', chrome.runtime.lastError.message);
             }
         }
     } catch (e) {
-        setStatus('Error: Cannot access this page. Try reloading the tab.');
+        setStatus('Error: Cannot access this page. Try reloading the tab.', true);
         console.error('Extension error:', e);
     }
 }
