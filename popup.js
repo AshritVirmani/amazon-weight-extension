@@ -16,51 +16,10 @@ async function sendMessageToContentScript(action) {
             setStatus('Error: Could not find active tab.', true);
             return;
         }
-
-        // Check if the tab is an Amazon Seller Central page
-        if (!tab.url || !tab.url.startsWith('https://sellercentral.amazon.')) {
-            setStatus('Error: Not an Amazon Seller Central page.', true);
-            return;
-        }
-
-        // 1. Inject the scripts. executeScript returns a promise that resolves when the scripts are done.
-        try {
-            await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                files: ['utils.js', 'content_script.js'],
-            });
-        } catch (e) {
-            setStatus('Error: Failed to inject scripts into the page.', true);
-            console.error('Injection error:', e);
-            return;
-        }
-
-        // 2. Execute a function on the page to run our logic and get the result.
-        const injectionResults = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: async (actionToPerform) => {
-                // This function is executed in the content script's context
-                try {
-                    if (actionToPerform === 'fillWeights') {
-                        return await handleFillWeights();
-                    } else if (actionToPerform === 'highlightAnomalies') {
-                        return await handleHighlightAnomalies(false);
-                    } else if (actionToPerform === 'highlightAnomaliesOrders') {
-                        return await handleHighlightAnomalies(true);
-                    }
-                } catch (e) {
-                    return { error: e.message };
-                }
-            },
-            args: [action],
-        });
-
-        if (!injectionResults || injectionResults.length === 0) {
-            setStatus('Error: Failed to get a response from the page.', true);
-            return;
-        }
-
-        const response = injectionResults[0].result;
+        
+        // The content script should be auto-injected by the manifest.
+        // We send a message and handle the error if it's not there.
+        const response = await chrome.tabs.sendMessage(tab.id, { action });
         
         if (response) {
             if (response.error) {
@@ -95,11 +54,20 @@ async function sendMessageToContentScript(action) {
                     setStatus(totalHighlighted > 0 ? finalMsg : 'No anomalies found to highlight.');
                 }
             }
+        } else if (chrome.runtime.lastError) {
+            // This is the key check for the connection error
+            setStatus("Error: Cannot connect. Please reload the page and try again.", true);
+            console.error(chrome.runtime.lastError.message);
         } else {
-            setStatus('Error: Received no response from page. Try reloading the tab.', true);
+            setStatus('Error: Received an empty response from the page.', true);
         }
     } catch (e) {
-        setStatus('Error: An unexpected error occurred. Try reloading the tab.', true);
+        // This will catch the "Receiving end does not exist" error
+        if (e.message && e.message.includes("Receiving end does not exist")) {
+            setStatus("Error: Cannot connect. Please reload the page and try again.", true);
+        } else {
+            setStatus(`An unexpected error occurred: ${e.message}`, true);
+        }
         console.error('Extension error:', e);
     }
 }

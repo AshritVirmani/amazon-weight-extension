@@ -484,3 +484,27 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
         skippedUnframedCount
     };
 }
+
+/**
+ * Listen for messages from the popup script.
+ */
+// Ensure the listener is only added once
+if (typeof window.myExtensionListenersAdded === 'undefined') {
+    window.myExtensionListenersAdded = true;
+
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        (async () => {
+            if (request.action === "fillWeights") {
+                const result = await handleFillWeights();
+                sendResponse(result);
+            } else if (request.action === "highlightAnomalies") {
+                const result = await handleHighlightAnomalies(false); // isOrdersPage = false
+                sendResponse(result);
+            } else if (request.action === "highlightAnomaliesOrders") {
+                const result = await handleHighlightAnomalies(true); // isOrdersPage = true
+                sendResponse(result);
+            }
+        })();
+        return true; // Indicates that the response is sent asynchronously.
+    });
+}
