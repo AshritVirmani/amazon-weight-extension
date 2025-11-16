@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Amazon Weight & Dimensions Filler",
+  "version": "1.1",
+  "description": "Fills weight (410g) and package dimensions (length, width, height) for Amazon orders.",
+  "permissions": [
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://sellercentral.amazon.com/*",
+    "https://sellercentral.amazon.in/*",
+    "https://sellercentral.amazon.co.uk/*",
+    "https://sellercentral.amazon.de/*",
+    "https://sellercentral.amazon.fr/*",
+    "https://sellercentral.amazon.it/*",
+    "https://sellercentral.amazon.es/*",
+    "https://sellercentral.amazon.ca/*",
+    "https://sellercentral.amazon.com.au/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
