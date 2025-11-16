@@ -26,11 +26,14 @@ async function handleFillWeights() {
 
     // Process each unique weight element only once
     for (const el of allWeightElements) {
+        // Check if the kat-input element is visible before processing
+        if (el.offsetParent === null) continue;
+        
         const testId = (el.getAttribute('data-testid') || '').toLowerCase();
         // Ensure it's not a dimension field
         if (!testId.includes('length') && !testId.includes('width') && !testId.includes('height')) {
             const input = getInputFromKatInput(el);
-            if (setInputValue(input, weightValue, el)) {
+            if (input && !input.disabled && setInputValue(input, weightValue, el)) {
                 weightCount++;
                 await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
             }
@@ -57,8 +60,11 @@ async function handleFillWeights() {
 
     // Process each unique dimension element only once
     for (const [el, dimensionType] of allDimensionElements.entries()) {
+        // Check if the kat-input element is visible before processing
+        if (el.offsetParent === null) continue;
+        
         const input = getInputFromKatInput(el);
-        if (setInputValue(input, dimensions[dimensionType], el)) {
+        if (input && !input.disabled && setInputValue(input, dimensions[dimensionType], el)) {
             dimensionCount++;
             await new Promise(resolve => setTimeout(resolve, 50));
         }
