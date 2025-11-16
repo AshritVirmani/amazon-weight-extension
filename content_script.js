@@ -1,9 +1,8 @@
 // This script is injected into the Amazon Seller Central pages.
-// It listens for messages from the popup and performs actions on the page.
+// Functions are exposed on the window object for direct execution.
 
 /**
  * Main function to handle filling weights and dimensions.
- * This will be triggered by a message from the popup.
  * @returns {object} A result object with counts of updated fields.
  */
 async function handleFillWeights() {
@@ -311,7 +310,6 @@ async function updateFieldsNearTitle(titleElement, weightValue, dimensions) {
 
 /**
  * Main function to handle highlighting anomalies.
- * This will be triggered by a message from the popup.
  * @returns {object} A result object with counts of highlighted anomalies.
  */
 async function handleHighlightAnomalies(isOrdersPage = false) {

@@ -64,18 +64,17 @@ async function executeActionOnPage(action) {
     }
 
     try {
-        // Step 1: Inject the necessary scripts. This is idempotent; scripts won't be re-injected if already present.
+        // Step 1: Inject the utility functions and content script
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ['utils.js', 'content_script.js'],
         });
 
-        // Step 2: Execute a function on the page to run our logic and get the result.
+        // Step 2: Execute the appropriate action by calling the function directly
         const injectionResults = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             func: async (actionToPerform) => {
-                // This function is executed in the page's context and has access to functions 
-                // from the injected scripts.
+                // This code runs in the page context where handleFillWeights and handleHighlightAnomalies are defined
                 try {
                     if (actionToPerform === 'fillWeights') {
                         return await handleFillWeights();
@@ -85,7 +84,7 @@ async function executeActionOnPage(action) {
                         return await handleHighlightAnomalies(true);
                     }
                 } catch (e) {
-                    return { error: e.toString() }; // Ensure error is serializable
+                    return { error: e.message || e.toString() };
                 }
             },
             args: [action],
