@@ -59,6 +59,57 @@ async function handleFillWeights() {
 }
 
 /**
+ * Finds and updates the weight and dimension fields within a specific product row.
+ * @param {Element} productRow - The container element for a single product.
+ * @returns {object} An object with counts of updated fields.
+ */
+async function updateProductFields(productRow) {
+    const weightValue = '890';
+    const dimensions = { length: '50', width: '30', height: '2.9' };
+    let weightUpdated = false;
+    let dimensionsUpdated = 0;
+
+    // Find and update weight field within the row
+    const weightInputEl = findAllElements('kat-input[data-testid*="weight"]', productRow)[0];
+    if (weightInputEl) {
+        const input = getInputFromKatInput(weightInputEl);
+        if (setInputValue(input, weightValue, weightInputEl)) {
+            weightUpdated = true;
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+
+    // Find and update dimension fields
+    const lengthEl = findAllElements('kat-input[data-testid="length-input"]', productRow)[0];
+    if (lengthEl) {
+        const input = getInputFromKatInput(lengthEl);
+        if (setInputValue(input, dimensions.length, lengthEl)) {
+            dimensionsUpdated++;
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+    const widthEl = findAllElements('kat-input[data-testid="width-input"]', productRow)[0];
+    if (widthEl) {
+        const input = getInputFromKatInput(widthEl);
+        if (setInputValue(input, dimensions.width, widthEl)) {
+            dimensionsUpdated++;
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+    const heightEl = findAllElements('kat-input[data-testid="height-input"]', productRow)[0];
+    if (heightEl) {
+        const input = getInputFromKatInput(heightEl);
+        if (setInputValue(input, dimensions.height, heightEl)) {
+            dimensionsUpdated++;
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+    
+    return { weightUpdated, dimensionsUpdated };
+}
+
+
+/**
  * Main function to handle highlighting anomalies.
  * This will be triggered by a message from the popup.
  * @returns {object} A result object with counts of highlighted anomalies.
@@ -133,15 +184,13 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
             highlightRow(row, highlightType);
 
             // Only update data on the shipments page, and skip unframed items
-            if (!isOrdersPage && isSizeAnomaly) {
-                if (data.isUnframed) {
+            if (!isOrdersPage && (isMultiOrder || isSizeAnomaly)) {
+                if (data.isUnframed && isSizeAnomaly) {
                     skippedUnframedCount++;
                 } else {
-                    // This is where we re-implement the auto-update logic
-                    // For simplicity in this restoration, we'll just increment a counter
-                    // The full field finding & setting logic would go here.
-                    weightUpdatedCount++; 
-                    dimensionsUpdatedCount += 3; // L, W, H
+                    const result = await updateProductFields(row);
+                    if (result.weightUpdated) weightUpdatedCount++;
+                    dimensionsUpdatedCount += result.dimensionsUpdated;
                 }
             }
         }
