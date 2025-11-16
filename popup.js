@@ -6,51 +6,42 @@ function setStatus(message, isError = false) {
     statusDiv.classList.toggle('success', !isError && (message.startsWith('Updated') || message.startsWith('Highlighted')));
 }
 
-// Helper to ensure content scripts are injected before sending messages
-async function ensureContentScriptsInjected(tabId) {
-    // First, try to ping to see if content script is already there
-    try {
-        await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-        return true; // Content script is already injected and ready
-    } catch (e) {
-        // Ignore ping errors - content script not available, we'll inject it
-    }
-    
-    // Content script not available, inject it
-    try {
-        await chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            files: ['utils.js', 'content_script.js']
-        });
-        
-        // Wait for scripts to initialize and verify they're ready
-        for (let i = 0; i < 5; i++) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            try {
-                await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-                return true; // Scripts are now ready
-            } catch (pingError) {
-                // Not ready yet, continue waiting
-                if (i === 4) {
-                    // Last attempt failed
-                    if (chrome.runtime.lastError) {
-                        console.error('Content scripts injected but not responding:', chrome.runtime.lastError.message);
-                    } else {
-                        console.error('Content scripts injected but not responding');
+// Helper to wait for content script to be ready (it should auto-inject from manifest.json)
+async function waitForContentScript(tabId, maxRetries = 5) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+            if (response && response.status === 'ready') {
+                return true;
+            }
+        } catch (e) {
+            // Content script not ready yet
+            if (i === maxRetries - 1) {
+                // Last attempt failed, try injecting manually as fallback
+                try {
+                    await chrome.scripting.executeScript({
+                        target: { tabId: tabId },
+                        files: ['utils.js', 'content_script.js']
+                    });
+                    // Wait a bit for injection
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    // Try one more ping
+                    try {
+                        await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+                        return true;
+                    } catch (finalError) {
+                        return false;
                     }
+                } catch (injectError) {
                     return false;
                 }
+            } else {
+                // Wait and retry
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
         }
-        return false;
-    } catch (injectError) {
-        if (chrome.runtime.lastError) {
-            console.error('Failed to inject content scripts:', chrome.runtime.lastError.message);
-        } else {
-            console.error('Failed to inject content scripts:', injectError);
-        }
-        return false;
     }
+    return false;
 }
 
 // Helper to send a message to the content script and handle the response
@@ -65,10 +56,10 @@ async function sendMessageToContentScript(action) {
             return;
         }
 
-        // Ensure content scripts are injected
-        const injected = await ensureContentScriptsInjected(tab.id);
-        if (!injected) {
-            setStatus('Error: Could not inject scripts. Try reloading the tab.', true);
+        // Wait for content script to be ready (auto-injected from manifest.json)
+        const ready = await waitForContentScript(tab.id);
+        if (!ready) {
+            setStatus('Error: Content script not ready. Please reload the page and try again.', true);
             return;
         }
 
