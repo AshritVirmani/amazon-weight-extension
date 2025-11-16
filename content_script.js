@@ -489,24 +489,29 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
 /**
  * Listen for messages from the popup script.
  */
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    (async () => {
-        // Handle ping to check if content script is loaded
-        if (request.action === "ping") {
-            sendResponse({ status: "ready" });
-            return;
-        }
-        
-        if (request.action === "fillWeights") {
-            const result = await handleFillWeights();
-            sendResponse(result);
-        } else if (request.action === "highlightAnomalies") {
-            const result = await handleHighlightAnomalies(false); // isOrdersPage = false
-            sendResponse(result);
-        } else if (request.action === "highlightAnomaliesOrders") {
-            const result = await handleHighlightAnomalies(true); // isOrdersPage = true
-            sendResponse(result);
-        }
-    })();
-    return true; // Indicates that the response is sent asynchronously.
-});
+// Ensure the listener is only added once
+if (typeof window.myExtensionListenersAdded === 'undefined') {
+    window.myExtensionListenersAdded = true;
+
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        (async () => {
+            // Handle ping to check if content script is loaded
+            if (request.action === "ping") {
+                sendResponse({ status: "ready" });
+                return;
+            }
+            
+            if (request.action === "fillWeights") {
+                const result = await handleFillWeights();
+                sendResponse(result);
+            } else if (request.action === "highlightAnomalies") {
+                const result = await handleHighlightAnomalies(false); // isOrdersPage = false
+                sendResponse(result);
+            } else if (request.action === "highlightAnomaliesOrders") {
+                const result = await handleHighlightAnomalies(true); // isOrdersPage = true
+                sendResponse(result);
+            }
+        })();
+        return true; // Indicates that the response is sent asynchronously.
+    });
+}

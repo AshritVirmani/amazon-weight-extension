@@ -6,96 +6,39 @@ function setStatus(message, isError = false) {
     statusDiv.classList.toggle('success', !isError && (message.startsWith('Updated') || message.startsWith('Highlighted')));
 }
 
-// Helper to ensure content script is ready (inject if needed)
-async function ensureContentScriptReady(tabId) {
-    // First, try a quick ping to see if it's already there
-    try {
-        const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-        if (response && response.status === 'ready') {
-            return true;
-        }
-    } catch (e) {
-        // Content script not found, that's okay - we'll inject it
-    }
-    
-    // Clear any lastError before proceeding
-    if (chrome.runtime.lastError) {
-        chrome.runtime.lastError; // Access it to clear it
-    }
-    
-    // Inject the scripts
-    try {
-        await chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            files: ['utils.js', 'content_script.js']
-        });
-    } catch (injectError) {
-        // If injection fails, check the error
-        if (chrome.runtime.lastError) {
-            console.error('Failed to inject scripts:', chrome.runtime.lastError.message);
-        }
-        return false;
-    }
-    
-    // Wait for scripts to initialize and verify they're ready
-    for (let i = 0; i < 5; i++) {
-        await new Promise(resolve => setTimeout(resolve, 150));
-        
-        // Clear lastError before each attempt
-        if (chrome.runtime.lastError) {
-            chrome.runtime.lastError; // Access to clear
-        }
-        
-        try {
-            const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-            if (response && response.status === 'ready') {
-                return true;
-            }
-        } catch (e) {
-            // Not ready yet, continue waiting
-            if (i === 4) {
-                return false; // Last attempt failed
-            }
-        }
-    }
-    
-    return false;
-}
-
 // Helper to send a message to the content script and handle the response
 async function sendMessageToContentScript(action) {
     setStatus('Working...');
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
+        if (!tab || !tab.id) {
+            setStatus('Error: Could not find active tab.', true);
+            return;
+        }
+
         // Check if the tab is an Amazon Seller Central page
         if (!tab.url || !tab.url.startsWith('https://sellercentral.amazon.')) {
             setStatus('Error: Not an Amazon Seller Central page.', true);
             return;
         }
 
-        // Ensure content script is ready (will inject if needed)
-        const ready = await ensureContentScriptReady(tab.id);
-        if (!ready) {
-            setStatus('Error: Could not load extension scripts. Please reload the page.', true);
-            return;
-        }
-
-        // Clear any lastError before sending message
-        if (chrome.runtime.lastError) {
-            chrome.runtime.lastError; // Access to clear
-        }
-
-        let response;
+        // Programmatically inject the scripts.
+        // The content script is written to be idempotent (it won't add duplicate listeners).
         try {
-            response = await chrome.tabs.sendMessage(tab.id, { action });
-        } catch (messageError) {
-            // Check for Chrome extension API errors
-            const errorMsg = chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Unknown error';
-            setStatus(`Error: ${errorMsg}. Please reload the page.`, true);
-            console.error('Error sending message:', messageError);
+            await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ['utils.js', 'content_script.js'],
+            });
+        } catch (e) {
+            setStatus('Error: Failed to inject script. See console for details.', true);
+            console.error('Injection error:', e);
             return;
         }
+
+
+        // Now that scripts are guaranteed to be there, send the message.
+        const response = await chrome.tabs.sendMessage(tab.id, { action });
         
         if (response) {
             if (response.error) {
