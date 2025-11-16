@@ -6,6 +6,29 @@ function setStatus(message, isError = false) {
     statusDiv.classList.toggle('success', !isError && (message.startsWith('Updated') || message.startsWith('Highlighted')));
 }
 
+// Helper to ensure content scripts are injected before sending messages
+async function ensureContentScriptsInjected(tabId) {
+    try {
+        // Try to send a ping message to see if content script is already there
+        await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+        return true; // Content script is already injected
+    } catch (e) {
+        // Content script not available, inject it
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ['utils.js', 'content_script.js']
+            });
+            // Wait a bit for scripts to initialize
+            await new Promise(resolve => setTimeout(resolve, 100));
+            return true;
+        } catch (injectError) {
+            console.error('Failed to inject content scripts:', injectError);
+            return false;
+        }
+    }
+}
+
 // Helper to send a message to the content script and handle the response
 async function sendMessageToContentScript(action) {
     setStatus('Working...');
@@ -15,6 +38,13 @@ async function sendMessageToContentScript(action) {
         // Check if the tab is an Amazon Seller Central page
         if (!tab.url || !tab.url.startsWith('https://sellercentral.amazon.')) {
             setStatus('Error: Not an Amazon Seller Central page.', true);
+            return;
+        }
+
+        // Ensure content scripts are injected
+        const injected = await ensureContentScriptsInjected(tab.id);
+        if (!injected) {
+            setStatus('Error: Could not inject scripts. Try reloading the tab.', true);
             return;
         }
 
@@ -54,11 +84,7 @@ async function sendMessageToContentScript(action) {
                 }
             }
         } else {
-            // This can happen if the content script is not injected yet.
-            setStatus('Error: Could not connect to the page. Try reloading the tab.', true);
-            if (chrome.runtime.lastError) {
-                console.error('Error sending message:', chrome.runtime.lastError.message);
-            }
+            setStatus('Error: No response from page. Try reloading the tab.', true);
         }
     } catch (e) {
         setStatus('Error: Cannot access this page. Try reloading the tab.', true);

@@ -491,6 +491,12 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
+        // Handle ping to check if content script is loaded
+        if (request.action === "ping") {
+            sendResponse({ status: "ready" });
+            return;
+        }
+        
         if (request.action === "fillWeights") {
             const result = await handleFillWeights();
             sendResponse(result);
