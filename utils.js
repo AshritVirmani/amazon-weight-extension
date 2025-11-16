@@ -172,25 +172,73 @@ function findOrderId(element) {
 }
 
 /**
+ * Finds all elements within a container, including shadow DOMs.
+ * @param {Element} container - The container to search within.
+ * @param {string} selector - The CSS selector to match.
+ * @returns {Array<Element>} An array of unique elements found.
+ */
+function findAllElementsInContainer(container, selector) {
+    let elements = [];
+    if (!container) return elements;
+    
+    const walker = document.createTreeWalker(
+        container,
+        NodeFilter.SHOW_ELEMENT,
+        null,
+        false
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+        if (node.shadowRoot) {
+            node.shadowRoot.querySelectorAll(selector).forEach(el => elements.push(el));
+        }
+    }
+    
+    if (container.querySelectorAll) {
+        container.querySelectorAll(selector).forEach(el => elements.push(el));
+    }
+    
+    return [...new Set(elements)];
+}
+
+/**
  * Checks if an element's text content contains a size anomaly (12x18 or 18x12).
  * @param {Element} element - The element to check.
  * @returns {boolean} True if the anomaly is found.
  */
 function hasSizeAnomaly(element) {
     if (!element) return false;
-    const text = (element.textContent || '').toLowerCase();
     
-    // Use regex to find "12x18" or "18x12" with optional spaces around the "x"
-    // This is a simplified but effective version of the original logic.
-    const patterns = [
-        /12\s*x\s*18/i,
-        /18\s*x\s*12/i,
-    ];
-    
-    for (const pattern of patterns) {
-        if (pattern.test(text)) {
-            return true;
+    try {
+        let container = element;
+        for (let i = 0; i < 20; i++) {
+            if (!container) break;
+            
+            const text = (container.textContent || '').toLowerCase();
+            const innerHTML = (container.innerHTML || '').toLowerCase();
+            const combined = text + ' ' + innerHTML;
+            
+            // Check for 12x18 or 18x12 patterns
+            const patterns = [
+                /12\s*x\s*18/i,
+                /18\s*x\s*12/i,
+                /12x18/i,
+                /18x12/i,
+                /12\s*["']\s*x\s*18\s*["']/i,
+                /18\s*["']\s*x\s*12\s*["']/i
+            ];
+            
+            for (const pattern of patterns) {
+                if (pattern.test(combined)) {
+                    return true;
+                }
+            }
+            
+            container = container.parentElement;
         }
+    } catch (e) {
+        console.warn('Error checking for size anomaly:', e);
     }
     return false;
 }

@@ -60,49 +60,230 @@ async function handleFillWeights() {
 
 /**
  * Finds and updates the weight and dimension fields within a specific product row.
+ * Uses the comprehensive v1 logic with multiple selectors and fallbacks.
  * @param {Element} productRow - The container element for a single product.
  * @returns {object} An object with counts of updated fields.
  */
 async function updateProductFields(productRow) {
+    if (!productRow) return { weightUpdated: false, dimensionsUpdated: 0 };
+    
     const weightValue = '890';
     const dimensions = { length: '50', width: '30', height: '2.9' };
     let weightUpdated = false;
     let dimensionsUpdated = 0;
+    
+    try {
+        // Find weight field in this product row - search more thoroughly including shadow DOMs
+        const weightSelectors = [
+            'input[id*="katal-id-"]',
+            'kat-input[unique-id*="katal-id-"]'
+        ];
+        
+        for (const selector of weightSelectors) {
+            const weightInputs = findAllElementsInContainer(productRow, selector);
+            for (const element of weightInputs) {
+                // Exclude dimension inputs
+                const testId = (element.getAttribute && element.getAttribute('data-testid')) || '';
+                const id = (element.id || '').toLowerCase();
+                const uniqueId = (element.getAttribute && element.getAttribute('unique-id')) || '';
+                
+                if (testId.includes('length') || testId.includes('width') || testId.includes('height') ||
+                    id.includes('length') || id.includes('width') || id.includes('height') ||
+                    uniqueId.includes('length') || uniqueId.includes('width') || uniqueId.includes('height')) {
+                    continue;
+                }
+                
+                let actualInput = element;
+                let katInputElement = null;
+                
+                if (element.tagName === 'KAT-INPUT') {
+                    katInputElement = element;
+                    actualInput = getInputFromKatInput(element);
+                    if (!actualInput) continue;
+                }
+                
+                const isVisible = element.offsetParent !== null;
+                if (isVisible && actualInput && !actualInput.disabled) {
+                    if (setInputValue(actualInput, weightValue, katInputElement)) {
+                        weightUpdated = true;
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                        break;
+                    }
+                }
+            }
+            if (weightUpdated) break;
+        }
+        
+        // Find dimension fields in this product row - search more thoroughly
+        const lengthFields = findAllElementsInContainer(productRow, 'kat-input[data-testid="length-input"]');
+        const widthFields = findAllElementsInContainer(productRow, 'kat-input[data-testid="width-input"]');
+        const heightFields = findAllElementsInContainer(productRow, 'kat-input[data-testid="height-input"]');
+        
+        // Also try alternative selectors for dimensions
+        const altDimensionSelectors = [
+            'kat-input.dimensions-input',
+            'input[id*="length" i]',
+            'input[id*="width" i]',
+            'input[id*="height" i]'
+        ];
+        
+        for (const selector of altDimensionSelectors) {
+            const found = findAllElementsInContainer(productRow, selector);
+            for (const element of found) {
+                const testId = (element.getAttribute && element.getAttribute('data-testid')) || '';
+                const className = (element.className || '').toLowerCase();
+                const id = (element.id || '').toLowerCase();
+                
+                if (testId.includes('length') || className.includes('length') || id.includes('length')) {
+                    if (!lengthFields.includes(element)) lengthFields.push(element);
+                } else if (testId.includes('width') || className.includes('width') || id.includes('width')) {
+                    if (!widthFields.includes(element)) widthFields.push(element);
+                } else if (testId.includes('height') || className.includes('height') || id.includes('height')) {
+                    if (!heightFields.includes(element)) heightFields.push(element);
+                }
+            }
+        }
+        
+        // Update length - use first found field
+        if (lengthFields.length > 0) {
+            const lengthField = lengthFields[0];
+            const actualInput = getInputFromKatInput(lengthField);
+            if (actualInput && lengthField.offsetParent !== null && !actualInput.disabled) {
+                if (setInputValue(actualInput, dimensions.length, lengthField)) {
+                    dimensionsUpdated++;
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+        }
+        
+        // Update width - use first found field
+        if (widthFields.length > 0) {
+            const widthField = widthFields[0];
+            const actualInput = getInputFromKatInput(widthField);
+            if (actualInput && widthField.offsetParent !== null && !actualInput.disabled) {
+                if (setInputValue(actualInput, dimensions.width, widthField)) {
+                    dimensionsUpdated++;
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+        }
+        
+        // Update height - use first found field
+        if (heightFields.length > 0) {
+            const heightField = heightFields[0];
+            const actualInput = getInputFromKatInput(heightField);
+            if (actualInput && heightField.offsetParent !== null && !actualInput.disabled) {
+                if (setInputValue(actualInput, dimensions.height, heightField)) {
+                    dimensionsUpdated++;
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Error updating product fields:', e);
+    }
+    
+    return { weightUpdated, dimensionsUpdated };
+}
 
-    // Find and update weight field within the row
-    const weightInputEl = findAllElements('kat-input[data-testid*="weight"]', productRow)[0];
-    if (weightInputEl) {
-        const input = getInputFromKatInput(weightInputEl);
-        if (setInputValue(input, weightValue, weightInputEl)) {
-            weightUpdated = true;
-            await new Promise(resolve => setTimeout(resolve, 50));
+/**
+ * Helper to find fields near a title element (fallback when row search fails).
+ * @param {Element} titleElement - The title element to search near.
+ * @param {string} weightValue - The weight value to set.
+ * @param {object} dimensions - The dimension values to set.
+ * @returns {object} An object with counts of updated fields.
+ */
+async function updateFieldsNearTitle(titleElement, weightValue, dimensions) {
+    if (!titleElement) return { weightUpdated: false, dimensionsUpdated: 0 };
+    
+    let weightUpdated = false;
+    let dimensionsUpdated = 0;
+    
+    try {
+        // Find the container that holds both title and fields
+        let container = titleElement;
+        for (let i = 0; i < 10; i++) {
+            container = container.parentElement;
+            if (!container) break;
+            
+            // Search for fields in this container
+            const weightSelectors = ['input[id*="katal-id-"]', 'kat-input[unique-id*="katal-id-"]'];
+            for (const selector of weightSelectors) {
+                const weightInputs = findAllElementsInContainer(container, selector);
+                for (const element of weightInputs) {
+                    const testId = (element.getAttribute && element.getAttribute('data-testid')) || '';
+                    const id = (element.id || '').toLowerCase();
+                    const uniqueId = (element.getAttribute && element.getAttribute('unique-id')) || '';
+                    
+                    if (testId.includes('length') || testId.includes('width') || testId.includes('height') ||
+                        id.includes('length') || id.includes('width') || id.includes('height') ||
+                        uniqueId.includes('length') || uniqueId.includes('width') || uniqueId.includes('height')) {
+                        continue;
+                    }
+                    
+                    let actualInput = element;
+                    let katInputElement = null;
+                    
+                    if (element.tagName === 'KAT-INPUT') {
+                        katInputElement = element;
+                        actualInput = getInputFromKatInput(element);
+                        if (!actualInput) continue;
+                    }
+                    
+                    if (element.offsetParent !== null && actualInput && !actualInput.disabled) {
+                        if (setInputValue(actualInput, weightValue, katInputElement)) {
+                            weightUpdated = true;
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                            break;
+                        }
+                    }
+                }
+                if (weightUpdated) break;
+            }
+            
+            // Find dimension fields
+            const lengthFields = findAllElementsInContainer(container, 'kat-input[data-testid="length-input"]');
+            const widthFields = findAllElementsInContainer(container, 'kat-input[data-testid="width-input"]');
+            const heightFields = findAllElementsInContainer(container, 'kat-input[data-testid="height-input"]');
+            
+            if (lengthFields.length > 0) {
+                const lengthField = lengthFields[0];
+                const actualInput = getInputFromKatInput(lengthField);
+                if (actualInput && lengthField.offsetParent !== null && !actualInput.disabled) {
+                    if (setInputValue(actualInput, dimensions.length, lengthField)) {
+                        dimensionsUpdated++;
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                }
+            }
+            
+            if (widthFields.length > 0) {
+                const widthField = widthFields[0];
+                const actualInput = getInputFromKatInput(widthField);
+                if (actualInput && widthField.offsetParent !== null && !actualInput.disabled) {
+                    if (setInputValue(actualInput, dimensions.width, widthField)) {
+                        dimensionsUpdated++;
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                }
+            }
+            
+            if (heightFields.length > 0) {
+                const heightField = heightFields[0];
+                const actualInput = getInputFromKatInput(heightField);
+                if (actualInput && heightField.offsetParent !== null && !actualInput.disabled) {
+                    if (setInputValue(actualInput, dimensions.height, heightField)) {
+                        dimensionsUpdated++;
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                }
+            }
+            
+            // If we found fields, we're done
+            if (weightUpdated && dimensionsUpdated >= 2) break;
         }
-    }
-
-    // Find and update dimension fields
-    const lengthEl = findAllElements('kat-input[data-testid="length-input"]', productRow)[0];
-    if (lengthEl) {
-        const input = getInputFromKatInput(lengthEl);
-        if (setInputValue(input, dimensions.length, lengthEl)) {
-            dimensionsUpdated++;
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-    }
-    const widthEl = findAllElements('kat-input[data-testid="width-input"]', productRow)[0];
-    if (widthEl) {
-        const input = getInputFromKatInput(widthEl);
-        if (setInputValue(input, dimensions.width, widthEl)) {
-            dimensionsUpdated++;
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-    }
-    const heightEl = findAllElements('kat-input[data-testid="height-input"]', productRow)[0];
-    if (heightEl) {
-        const input = getInputFromKatInput(heightEl);
-        if (setInputValue(input, dimensions.height, heightEl)) {
-            dimensionsUpdated++;
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
+    } catch (e) {
+        console.warn('Error updating fields near title:', e);
     }
     
     return { weightUpdated, dimensionsUpdated };
@@ -125,7 +306,7 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
 
     // Group products by their containing row and order ID
     const orderProducts = {};
-    const productRows = new Map(); // Map<Element, {title: string, orderId: string, isUnframed: boolean}>
+    const productRows = new Map(); // Map<Element, {titleElement: Element, title: string, orderId: string, isUnframed: boolean}>
 
     for (const titleElement of productTitles) {
         const productRow = findProductRow(titleElement);
@@ -142,6 +323,7 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
             orderProducts[orderId].push(productRow);
 
             productRows.set(productRow, {
+                titleElement: titleElement,
                 title: titleText,
                 orderId: orderId,
                 isUnframed: titleText.includes('unframed') || titleText.includes('tape')
@@ -152,17 +334,43 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
     const multiOrderProducts = new Set();
     const sizeAnomalyProducts = new Set();
     
-    // Identify multi-order products
+    // Identify multi-order products (orders with more than 1 product)
     for (const orderId in orderProducts) {
         if (orderProducts[orderId].length > 1) {
             orderProducts[orderId].forEach(row => multiOrderProducts.add(row));
         }
     }
 
-    // Identify size anomaly products
-    for (const [row, data] of productRows.entries()) {
-        if (hasSizeAnomaly(row)) {
-            sizeAnomalyProducts.add(row);
+    // Identify size anomaly products by checking product titles
+    const productTitleElements = findAllElements('span[data-testid="line-item-title"]');
+    for (const titleElement of productTitleElements) {
+        const titleText = (titleElement.textContent || '').toLowerCase();
+        const titleHTML = (titleElement.innerHTML || '').toLowerCase();
+        const combined = titleText + ' ' + titleHTML;
+        
+        // Check for 12x18 or 18x12 patterns in the product name
+        const patterns = [
+            /12\s*x\s*18/i,
+            /18\s*x\s*12/i,
+            /12x18/i,
+            /18x12/i,
+            /12\s*["']\s*x\s*18\s*["']/i,
+            /18\s*["']\s*x\s*12\s*["']/i
+        ];
+        
+        let hasSizeAnomaly = false;
+        for (const pattern of patterns) {
+            if (pattern.test(combined)) {
+                hasSizeAnomaly = true;
+                break;
+            }
+        }
+        
+        if (hasSizeAnomaly) {
+            const productRow = findProductRow(titleElement);
+            if (productRow) {
+                sizeAnomalyProducts.add(productRow);
+            }
         }
     }
 
@@ -188,7 +396,14 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
                 if (data.isUnframed && isSizeAnomaly) {
                     skippedUnframedCount++;
                 } else {
-                    const result = await updateProductFields(row);
+                    // Try updating via product row first
+                    let result = await updateProductFields(row);
+                    // If that didn't work, try finding fields near the title
+                    if ((!result.weightUpdated || result.dimensionsUpdated < 2) && data.titleElement) {
+                        const titleResult = await updateFieldsNearTitle(data.titleElement, '890', { length: '50', width: '30', height: '2.9' });
+                        if (titleResult.weightUpdated) result.weightUpdated = true;
+                        result.dimensionsUpdated = Math.max(result.dimensionsUpdated, titleResult.dimensionsUpdated);
+                    }
                     if (result.weightUpdated) weightUpdatedCount++;
                     dimensionsUpdatedCount += result.dimensionsUpdated;
                 }
@@ -201,10 +416,25 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
         return { error: "No anomalies found to highlight." };
     }
 
+    // Count unique orders, not products
+    const multiOrderOrderIds = new Set();
+    for (const orderId in orderProducts) {
+        if (orderProducts[orderId].length > 1) {
+            multiOrderOrderIds.add(orderId);
+        }
+    }
+    
+    const sizeAnomalyOrderIds = new Set();
+    for (const [row, data] of productRows.entries()) {
+        if (sizeAnomalyProducts.has(row)) {
+            sizeAnomalyOrderIds.add(data.orderId);
+        }
+    }
+
     return { 
         totalHighlighted, 
-        multiOrderCount: multiOrderProducts.size, 
-        sizeAnomalyCount: sizeAnomalyProducts.size,
+        multiOrderCount: multiOrderOrderIds.size, // Count unique orders, not products
+        sizeAnomalyCount: sizeAnomalyOrderIds.size, // Count unique orders, not products
         weightUpdatedCount,
         dimensionsUpdatedCount,
         skippedUnframedCount
