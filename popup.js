@@ -6,41 +6,59 @@ function setStatus(message, isError = false) {
     statusDiv.classList.toggle('success', !isError && (message.startsWith('Updated') || message.startsWith('Highlighted')));
 }
 
-// Helper to wait for content script to be ready (it should auto-inject from manifest.json)
-async function waitForContentScript(tabId, maxRetries = 5) {
-    for (let i = 0; i < maxRetries; i++) {
+// Helper to ensure content script is ready (inject if needed)
+async function ensureContentScriptReady(tabId) {
+    // First, try a quick ping to see if it's already there
+    try {
+        const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+        if (response && response.status === 'ready') {
+            return true;
+        }
+    } catch (e) {
+        // Content script not found, that's okay - we'll inject it
+    }
+    
+    // Clear any lastError before proceeding
+    if (chrome.runtime.lastError) {
+        chrome.runtime.lastError; // Access it to clear it
+    }
+    
+    // Inject the scripts
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['utils.js', 'content_script.js']
+        });
+    } catch (injectError) {
+        // If injection fails, check the error
+        if (chrome.runtime.lastError) {
+            console.error('Failed to inject scripts:', chrome.runtime.lastError.message);
+        }
+        return false;
+    }
+    
+    // Wait for scripts to initialize and verify they're ready
+    for (let i = 0; i < 5; i++) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        // Clear lastError before each attempt
+        if (chrome.runtime.lastError) {
+            chrome.runtime.lastError; // Access to clear
+        }
+        
         try {
             const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
             if (response && response.status === 'ready') {
                 return true;
             }
         } catch (e) {
-            // Content script not ready yet
-            if (i === maxRetries - 1) {
-                // Last attempt failed, try injecting manually as fallback
-                try {
-                    await chrome.scripting.executeScript({
-                        target: { tabId: tabId },
-                        files: ['utils.js', 'content_script.js']
-                    });
-                    // Wait a bit for injection
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    // Try one more ping
-                    try {
-                        await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-                        return true;
-                    } catch (finalError) {
-                        return false;
-                    }
-                } catch (injectError) {
-                    return false;
-                }
-            } else {
-                // Wait and retry
-                await new Promise(resolve => setTimeout(resolve, 200));
+            // Not ready yet, continue waiting
+            if (i === 4) {
+                return false; // Last attempt failed
             }
         }
     }
+    
     return false;
 }
 
@@ -56,11 +74,16 @@ async function sendMessageToContentScript(action) {
             return;
         }
 
-        // Wait for content script to be ready (auto-injected from manifest.json)
-        const ready = await waitForContentScript(tab.id);
+        // Ensure content script is ready (will inject if needed)
+        const ready = await ensureContentScriptReady(tab.id);
         if (!ready) {
-            setStatus('Error: Content script not ready. Please reload the page and try again.', true);
+            setStatus('Error: Could not load extension scripts. Please reload the page.', true);
             return;
+        }
+
+        // Clear any lastError before sending message
+        if (chrome.runtime.lastError) {
+            chrome.runtime.lastError; // Access to clear
         }
 
         let response;
@@ -68,11 +91,8 @@ async function sendMessageToContentScript(action) {
             response = await chrome.tabs.sendMessage(tab.id, { action });
         } catch (messageError) {
             // Check for Chrome extension API errors
-            if (chrome.runtime.lastError) {
-                setStatus(`Error: ${chrome.runtime.lastError.message}. Try reloading the tab.`, true);
-            } else {
-                setStatus('Error: Could not communicate with page. Try reloading the tab.', true);
-            }
+            const errorMsg = chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Unknown error';
+            setStatus(`Error: ${errorMsg}. Please reload the page.`, true);
             console.error('Error sending message:', messageError);
             return;
         }
