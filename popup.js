@@ -8,24 +8,48 @@ function setStatus(message, isError = false) {
 
 // Helper to ensure content scripts are injected before sending messages
 async function ensureContentScriptsInjected(tabId) {
+    // First, try to ping to see if content script is already there
     try {
-        // Try to send a ping message to see if content script is already there
         await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-        return true; // Content script is already injected
+        return true; // Content script is already injected and ready
     } catch (e) {
-        // Content script not available, inject it
-        try {
-            await chrome.scripting.executeScript({
-                target: { tabId: tabId },
-                files: ['utils.js', 'content_script.js']
-            });
-            // Wait a bit for scripts to initialize
+        // Ignore ping errors - content script not available, we'll inject it
+    }
+    
+    // Content script not available, inject it
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['utils.js', 'content_script.js']
+        });
+        
+        // Wait for scripts to initialize and verify they're ready
+        for (let i = 0; i < 5; i++) {
             await new Promise(resolve => setTimeout(resolve, 100));
-            return true;
-        } catch (injectError) {
-            console.error('Failed to inject content scripts:', injectError);
-            return false;
+            try {
+                await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+                return true; // Scripts are now ready
+            } catch (pingError) {
+                // Not ready yet, continue waiting
+                if (i === 4) {
+                    // Last attempt failed
+                    if (chrome.runtime.lastError) {
+                        console.error('Content scripts injected but not responding:', chrome.runtime.lastError.message);
+                    } else {
+                        console.error('Content scripts injected but not responding');
+                    }
+                    return false;
+                }
+            }
         }
+        return false;
+    } catch (injectError) {
+        if (chrome.runtime.lastError) {
+            console.error('Failed to inject content scripts:', chrome.runtime.lastError.message);
+        } else {
+            console.error('Failed to inject content scripts:', injectError);
+        }
+        return false;
     }
 }
 
@@ -48,7 +72,19 @@ async function sendMessageToContentScript(action) {
             return;
         }
 
-        const response = await chrome.tabs.sendMessage(tab.id, { action });
+        let response;
+        try {
+            response = await chrome.tabs.sendMessage(tab.id, { action });
+        } catch (messageError) {
+            // Check for Chrome extension API errors
+            if (chrome.runtime.lastError) {
+                setStatus(`Error: ${chrome.runtime.lastError.message}. Try reloading the tab.`, true);
+            } else {
+                setStatus('Error: Could not communicate with page. Try reloading the tab.', true);
+            }
+            console.error('Error sending message:', messageError);
+            return;
+        }
         
         if (response) {
             if (response.error) {
