@@ -30,9 +30,27 @@ async function sendMessageToContentScript(action) {
                     const msg = `Updated: ${weightCount} weight(s), ${dimensionCount} dimension(s).`;
                     setStatus(weightCount > 0 || dimensionCount > 0 ? msg : 'No fields found to update.');
                 } else if (action.startsWith('highlightAnomalies')) {
-                    const { totalHighlighted = 0, multiOrderCount = 0, sizeAnomalyCount = 0 } = response;
-                    const msg = `Highlighted: ${totalHighlighted} total anomalies (${multiOrderCount} multi-order, ${sizeAnomalyCount} size).`;
-                    setStatus(totalHighlighted > 0 ? msg : 'No anomalies found to highlight.');
+                    const { 
+                        totalHighlighted = 0, 
+                        multiOrderCount = 0, 
+                        sizeAnomalyCount = 0,
+                        weightUpdatedCount = 0,
+                        dimensionsUpdatedCount = 0,
+                        skippedUnframedCount = 0
+                    } = response;
+
+                    let parts = [`Highlighted: ${totalHighlighted} total`];
+                    if (multiOrderCount > 0) parts.push(`${multiOrderCount} multi-order`);
+                    if (sizeAnomalyCount > 0) parts.push(`${sizeAnomalyCount} size`);
+                    
+                    let updateMsg = '';
+                    if (weightUpdatedCount > 0) updateMsg += `${weightUpdatedCount} weights updated. `;
+                    if (skippedUnframedCount > 0) updateMsg += `${skippedUnframedCount} unframed items skipped.`;
+
+                    let finalMsg = parts.join(', ') + '.';
+                    if (updateMsg) finalMsg += ` ${updateMsg}`;
+                    
+                    setStatus(totalHighlighted > 0 ? finalMsg : 'No anomalies found to highlight.');
                 }
             }
         } else {

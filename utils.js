@@ -143,3 +143,54 @@ function clearAllHighlights() {
         el.removeAttribute('data-extension-highlighted');
     });
 }
+
+/**
+ * Finds the order ID for a given element by traversing up the DOM.
+ * @param {Element} element - The starting element.
+ * @returns {string|null} The found order ID or null.
+ */
+function findOrderId(element) {
+    let container = element;
+    for (let i = 0; i < 20; i++) { // Limit search depth
+        if (!container) break;
+        const text = (container.textContent || '').trim();
+        
+        // Look for standard Amazon order ID format (e.g., 123-1234567-1234567)
+        const orderIdMatch = text.match(/\d{3}-\d{7}-\d{7}/);
+        if (orderIdMatch) {
+            return orderIdMatch[0];
+        }
+        
+        const dataOrderId = container.getAttribute('data-order-id');
+        if (dataOrderId) {
+            return dataOrderId;
+        }
+
+        container = container.parentElement;
+    }
+    return null;
+}
+
+/**
+ * Checks if an element's text content contains a size anomaly (12x18 or 18x12).
+ * @param {Element} element - The element to check.
+ * @returns {boolean} True if the anomaly is found.
+ */
+function hasSizeAnomaly(element) {
+    if (!element) return false;
+    const text = (element.textContent || '').toLowerCase();
+    
+    // Use regex to find "12x18" or "18x12" with optional spaces around the "x"
+    // This is a simplified but effective version of the original logic.
+    const patterns = [
+        /12\s*x\s*18/i,
+        /18\s*x\s*12/i,
+    ];
+    
+    for (const pattern of patterns) {
+        if (pattern.test(text)) {
+            return true;
+        }
+    }
+    return false;
+}
