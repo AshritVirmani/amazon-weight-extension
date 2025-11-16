@@ -3,7 +3,7 @@ function setStatus(message, isError = false) {
     const statusDiv = document.getElementById('status');
     statusDiv.textContent = message;
     statusDiv.classList.toggle('error', isError);
-    statusDiv.classList.toggle('success', !isError && message.startsWith('Updated') || message.startsWith('Highlighted'));
+    statusDiv.classList.toggle('success', !isError && (message.startsWith('Updated') || message.startsWith('Highlighted')));
 }
 
 // Helper to send a message to the content script and handle the response
