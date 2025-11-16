@@ -40,8 +40,8 @@ async function sendMessageToContentScript(action) {
                     } = response;
 
                     let parts = [`Highlighted: ${totalHighlighted} total`];
-                    if (multiOrderCount > 0) parts.push(`${multiOrderCount} multi-order`);
-                    if (sizeAnomalyCount > 0) parts.push(`${sizeAnomalyCount} size`);
+                    if (multiOrderCount > 0) parts.push(`${multiOrderCount} orders (>4 products)`);
+                    if (sizeAnomalyCount > 0) parts.push(`${sizeAnomalyCount} size anomalies`);
                     
                     let updateMsg = '';
                     if (weightUpdatedCount > 0) updateMsg += `${weightUpdatedCount} weights updated. `;

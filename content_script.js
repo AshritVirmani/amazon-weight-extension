@@ -331,29 +331,35 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
         }
     }
 
-    const multiOrderProducts = new Set();
+    const multiOrderProducts = new Set(); // Orders with MORE THAN 4 products
     const sizeAnomalyProducts = new Set();
     
-    // Identify multi-order products (orders with more than 1 product)
+    // Identify multi-order products (orders with MORE THAN 4 products)
+    // Only these will have their weights/dimensions updated (if they don't have size anomalies)
     for (const orderId in orderProducts) {
-        if (orderProducts[orderId].length > 1) {
+        if (orderProducts[orderId].length > 4) {
             orderProducts[orderId].forEach(row => multiOrderProducts.add(row));
         }
     }
 
     // Identify size anomaly products by checking product titles
+    // Look for 12x18, 18x12, 12*18, or 18*12 patterns
     const productTitleElements = findAllElements('span[data-testid="line-item-title"]');
     for (const titleElement of productTitleElements) {
         const titleText = (titleElement.textContent || '').toLowerCase();
         const titleHTML = (titleElement.innerHTML || '').toLowerCase();
         const combined = titleText + ' ' + titleHTML;
         
-        // Check for 12x18 or 18x12 patterns in the product name
+        // Check for 12x18, 18x12, 12*18, or 18*12 patterns in the product name
         const patterns = [
             /12\s*x\s*18/i,
             /18\s*x\s*12/i,
+            /12\s*\*\s*18/i,  // Support asterisk
+            /18\s*\*\s*12/i,  // Support asterisk
             /12x18/i,
             /18x12/i,
+            /12\*18/i,        // Support asterisk
+            /18\*12/i,        // Support asterisk
             /12\s*["']\s*x\s*18\s*["']/i,
             /18\s*["']\s*x\s*12\s*["']/i
         ];
@@ -391,12 +397,29 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
         if (highlightType) {
             highlightRow(row, highlightType);
 
-            // Only update data on the shipments page, and skip unframed items
-            if (!isOrdersPage && (isMultiOrder || isSizeAnomaly)) {
-                if (data.isUnframed && isSizeAnomaly) {
-                    skippedUnframedCount++;
-                } else {
-                    // Try updating via product row first
+            // Only update data on the shipments page
+            // Update rules:
+            // 1. Size anomalies (12x18/18x12) - always update (unless unframed/tape)
+            // 2. Multi-order (>4 products) - only update if NOT a size anomaly
+            if (!isOrdersPage) {
+                if (isSizeAnomaly) {
+                    // Size anomalies: update unless unframed/tape
+                    if (data.isUnframed) {
+                        skippedUnframedCount++;
+                    } else {
+                        // Try updating via product row first
+                        let result = await updateProductFields(row);
+                        // If that didn't work, try finding fields near the title
+                        if ((!result.weightUpdated || result.dimensionsUpdated < 2) && data.titleElement) {
+                            const titleResult = await updateFieldsNearTitle(data.titleElement, '890', { length: '50', width: '30', height: '2.9' });
+                            if (titleResult.weightUpdated) result.weightUpdated = true;
+                            result.dimensionsUpdated = Math.max(result.dimensionsUpdated, titleResult.dimensionsUpdated);
+                        }
+                        if (result.weightUpdated) weightUpdatedCount++;
+                        dimensionsUpdatedCount += result.dimensionsUpdated;
+                    }
+                } else if (isMultiOrder) {
+                    // Multi-order (>4 products) without size anomaly: update weights/dimensions
                     let result = await updateProductFields(row);
                     // If that didn't work, try finding fields near the title
                     if ((!result.weightUpdated || result.dimensionsUpdated < 2) && data.titleElement) {
@@ -417,13 +440,15 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
     }
 
     // Count unique orders, not products
+    // Multi-order: orders with MORE THAN 4 products
     const multiOrderOrderIds = new Set();
     for (const orderId in orderProducts) {
-        if (orderProducts[orderId].length > 1) {
+        if (orderProducts[orderId].length > 4) {
             multiOrderOrderIds.add(orderId);
         }
     }
     
+    // Size anomaly: orders containing products with 12x18/18x12/12*18/18*12 patterns
     const sizeAnomalyOrderIds = new Set();
     for (const [row, data] of productRows.entries()) {
         if (sizeAnomalyProducts.has(row)) {

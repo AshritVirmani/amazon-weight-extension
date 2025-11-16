@@ -106,6 +106,12 @@ function findProductRow(element) {
 
 /**
  * Highlights a given element with a specific style based on the anomaly type.
+ * 
+ * Color Legend:
+ * - Orange/Yellow: Orders with MORE THAN 4 products (multi-order) - weights/dimensions will be updated
+ * - Red/Pink: Products with 12x18, 18x12, 12*18, or 18*12 size patterns (size anomaly) - weights/dimensions will be updated (unless unframed/tape)
+ * - Purple: Products that match BOTH conditions (multi-order + size anomaly) - weights/dimensions will be updated (unless unframed/tape)
+ * 
  * @param {Element} container - The element to highlight.
  * @param {string} colorType - The type of anomaly ('multi-order', 'size-anomaly', 'both').
  */
@@ -119,8 +125,11 @@ function highlightRow(container, colorType) {
     container.removeAttribute('data-extension-highlighted');
 
     const styles = {
+        // Orange/Yellow: Orders with MORE THAN 4 products
         'multi-order': { bg: '#fff3cd', border: '3px solid #ff9900' },
+        // Red/Pink: Products with 12x18/18x12/12*18/18*12 size patterns
         'size-anomaly': { bg: '#ffe6e6', border: '3px solid #ff6b6b' },
+        // Purple: Both conditions (multi-order + size anomaly)
         'both': { bg: '#e6e6ff', border: '3px solid #9b59b6' },
     };
 
@@ -203,7 +212,8 @@ function findAllElementsInContainer(container, selector) {
 }
 
 /**
- * Checks if an element's text content contains a size anomaly (12x18 or 18x12).
+ * Checks if an element's text content contains a size anomaly.
+ * Looks for: 12x18, 18x12, 12*18, or 18*12 patterns (with x or asterisk).
  * @param {Element} element - The element to check.
  * @returns {boolean} True if the anomaly is found.
  */
@@ -219,12 +229,16 @@ function hasSizeAnomaly(element) {
             const innerHTML = (container.innerHTML || '').toLowerCase();
             const combined = text + ' ' + innerHTML;
             
-            // Check for 12x18 or 18x12 patterns
+            // Check for 12x18, 18x12, 12*18, or 18*12 patterns
             const patterns = [
                 /12\s*x\s*18/i,
                 /18\s*x\s*12/i,
+                /12\s*\*\s*18/i,  // Support asterisk
+                /18\s*\*\s*12/i,  // Support asterisk
                 /12x18/i,
                 /18x12/i,
+                /12\*18/i,        // Support asterisk
+                /18\*12/i,        // Support asterisk
                 /12\s*["']\s*x\s*18\s*["']/i,
                 /18\s*["']\s*x\s*12\s*["']/i
             ];
