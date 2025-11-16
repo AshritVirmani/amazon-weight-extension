@@ -11,7 +11,7 @@ async function sendMessageToContentScript(action) {
     setStatus('Working...');
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        
+
         if (!tab || !tab.id) {
             setStatus('Error: Could not find active tab.', true);
             return;
@@ -23,22 +23,44 @@ async function sendMessageToContentScript(action) {
             return;
         }
 
-        // Programmatically inject the scripts.
-        // The content script is written to be idempotent (it won't add duplicate listeners).
+        // 1. Inject the scripts. executeScript returns a promise that resolves when the scripts are done.
         try {
             await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 files: ['utils.js', 'content_script.js'],
             });
         } catch (e) {
-            setStatus('Error: Failed to inject script. See console for details.', true);
+            setStatus('Error: Failed to inject scripts into the page.', true);
             console.error('Injection error:', e);
             return;
         }
 
+        // 2. Execute a function on the page to run our logic and get the result.
+        const injectionResults = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: async (actionToPerform) => {
+                // This function is executed in the content script's context
+                try {
+                    if (actionToPerform === 'fillWeights') {
+                        return await handleFillWeights();
+                    } else if (actionToPerform === 'highlightAnomalies') {
+                        return await handleHighlightAnomalies(false);
+                    } else if (actionToPerform === 'highlightAnomaliesOrders') {
+                        return await handleHighlightAnomalies(true);
+                    }
+                } catch (e) {
+                    return { error: e.message };
+                }
+            },
+            args: [action],
+        });
 
-        // Now that scripts are guaranteed to be there, send the message.
-        const response = await chrome.tabs.sendMessage(tab.id, { action });
+        if (!injectionResults || injectionResults.length === 0) {
+            setStatus('Error: Failed to get a response from the page.', true);
+            return;
+        }
+
+        const response = injectionResults[0].result;
         
         if (response) {
             if (response.error) {
@@ -74,10 +96,10 @@ async function sendMessageToContentScript(action) {
                 }
             }
         } else {
-            setStatus('Error: No response from page. Try reloading the tab.', true);
+            setStatus('Error: Received no response from page. Try reloading the tab.', true);
         }
     } catch (e) {
-        setStatus('Error: Cannot access this page. Try reloading the tab.', true);
+        setStatus('Error: An unexpected error occurred. Try reloading the tab.', true);
         console.error('Extension error:', e);
     }
 }
