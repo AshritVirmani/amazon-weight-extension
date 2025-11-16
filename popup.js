@@ -48,8 +48,8 @@ function handleResponse(action, response) {
     }
 }
 
-// The main function to communicate with the content script
-async function sendMessageToContentScript(action) {
+// The main function to execute logic on the content page
+async function executeActionOnPage(action) {
     setStatus('Working...');
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -58,46 +58,61 @@ async function sendMessageToContentScript(action) {
         return;
     }
 
-    try {
-        // 1. First attempt: Assume script is already injected by the manifest.
-        const response = await chrome.tabs.sendMessage(tab.id, { action });
-        handleResponse(action, response);
-    } catch (e) {
-        // 2. Failure: The content script is not there.
-        if (e.message && e.message.includes("Receiving end does not exist")) {
-            console.warn("Content script not ready. Injecting programmatically.");
-            setStatus('Initializing connection...');
-            
-            try {
-                // 3. Inject scripts programmatically as a fallback.
-                await chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    files: ['utils.js', 'content_script.js'],
-                });
+    if (!tab.url || !tab.url.startsWith('https://sellercentral.amazon.')) {
+        setStatus('Error: Not an Amazon Seller Central page.', true);
+        return;
+    }
 
-                // 4. Retry sending the message.
-                const response = await chrome.tabs.sendMessage(tab.id, { action });
-                handleResponse(action, response);
-            } catch (retryError) {
-                console.error("Failed to send message after injection:", retryError);
-                setStatus("Error: Failed to connect after retry. Please reload the page.", true);
-            }
+    try {
+        // Step 1: Inject the necessary scripts. This is idempotent; scripts won't be re-injected if already present.
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['utils.js', 'content_script.js'],
+        });
+
+        // Step 2: Execute a function on the page to run our logic and get the result.
+        const injectionResults = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: async (actionToPerform) => {
+                // This function is executed in the page's context and has access to functions 
+                // from the injected scripts.
+                try {
+                    if (actionToPerform === 'fillWeights') {
+                        return await handleFillWeights();
+                    } else if (actionToPerform === 'highlightAnomalies') {
+                        return await handleHighlightAnomalies(false);
+                    } else if (actionToPerform === 'highlightAnomaliesOrders') {
+                        return await handleHighlightAnomalies(true);
+                    }
+                } catch (e) {
+                    return { error: e.toString() }; // Ensure error is serializable
+                }
+            },
+            args: [action],
+        });
+
+        if (injectionResults && injectionResults.length > 0) {
+            const response = injectionResults[0].result;
+            handleResponse(action, response);
         } else {
-            console.error('Extension error:', e);
-            setStatus(`An unexpected error occurred: ${e.message}`, true);
+            setStatus('Error: No response from the page after execution.', true);
         }
+
+    } catch (error) {
+        console.error("Failed to execute script:", error);
+        setStatus(`Injection failed: ${error.message}. Try reloading the page.`, true);
     }
 }
 
 // Add event listeners to buttons
 document.getElementById('fillWeightsBtn').addEventListener('click', () => {
-    sendMessageToContentScript('fillWeights');
+    executeActionOnPage('fillWeights');
 });
 
 document.getElementById('highlightAnomaliesBtn').addEventListener('click', () => {
-    sendMessageToContentScript('highlightAnomalies');
+    executeActionOnPage('highlightAnomalies');
 });
 
 document.getElementById('highlightAnomaliesOrdersBtn').addEventListener('click', () => {
-    sendMessageToContentScript('highlightAnomaliesOrders');
+    executeActionOnPage('highlightAnomaliesOrders');
 });

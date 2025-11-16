@@ -20,21 +20,5 @@
   ],
   "action": {
     "default_popup": "popup.html"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://sellercentral.amazon.com/*",
-        "https://sellercentral.amazon.in/*",
-        "https://sellercentral.amazon.co.uk/*",
-        "https://sellercentral.amazon.de/*",
-        "https://sellercentral.amazon.fr/*",
-        "https://sellercentral.amazon.it/*",
-        "https://sellercentral.amazon.es/*",
-        "https://sellercentral.amazon.ca/*",
-        "https://sellercentral.amazon.com.au/*"
-      ],
-      "js": ["utils.js", "content_script.js"]
-    }
-  ]
+  }
 }
