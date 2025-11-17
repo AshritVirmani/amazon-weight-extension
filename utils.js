@@ -111,9 +111,10 @@ function findProductRow(element) {
  * - Orange/Yellow: Orders with MORE THAN 4 products (multi-order) - weights/dimensions will be updated
  * - Red/Pink: Products with 12x18, 18x12, 12*18, or 18*12 size patterns (size anomaly) - weights/dimensions will be updated (unless unframed/tape)
  * - Purple: Products that match BOTH conditions (multi-order + size anomaly) - weights/dimensions will be updated (unless unframed/tape)
+ * - Green: Products with price > ₹450 (orders page only)
  * 
  * @param {Element} container - The element to highlight.
- * @param {string} colorType - The type of anomaly ('multi-order', 'size-anomaly', 'both').
+ * @param {string} colorType - The type of anomaly ('multi-order', 'size-anomaly', 'both', 'high-price').
  */
 function highlightRow(container, colorType) {
     if (!container) return;
@@ -131,6 +132,8 @@ function highlightRow(container, colorType) {
         'size-anomaly': { bg: '#ffe6e6', border: '3px solid #ff6b6b' },
         // Purple: Both conditions (multi-order + size anomaly)
         'both': { bg: '#e6e6ff', border: '3px solid #9b59b6' },
+        // Green: High price (> ₹450)
+        'high-price': { bg: '#d4edda', border: '3px solid #28a745' },
     };
 
     if (styles[colorType]) {

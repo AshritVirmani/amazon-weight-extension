@@ -17,27 +17,34 @@ function handleResponse(action, response) {
                 const msg = `Updated: ${weightCount} weight(s), ${dimensionCount} dimension(s).`;
                 setStatus(weightCount > 0 || dimensionCount > 0 ? msg : 'No fields found to update.');
             } else if (action.startsWith('highlightAnomalies')) {
-                const { 
-                    totalHighlighted = 0, 
-                    multiOrderCount = 0, 
-                    sizeAnomalyCount = 0,
-                    weightUpdatedCount = 0,
-                    dimensionsUpdatedCount = 0,
-                    skippedUnframedCount = 0
-                } = response;
+                // Check if this is the simpler price-based response (orders page)
+                if (response.priceThreshold !== undefined) {
+                    const { totalHighlighted = 0, priceThreshold } = response;
+                    setStatus(`Highlighted: ${totalHighlighted} product(s) with price > ₹${priceThreshold}.`);
+                } else {
+                    // Complex shipments page response
+                    const { 
+                        totalHighlighted = 0, 
+                        multiOrderCount = 0, 
+                        sizeAnomalyCount = 0,
+                        weightUpdatedCount = 0,
+                        dimensionsUpdatedCount = 0,
+                        skippedUnframedCount = 0
+                    } = response;
 
-                let parts = [`Highlighted: ${totalHighlighted} total`];
-                if (multiOrderCount > 0) parts.push(`${multiOrderCount} orders (>4 products)`);
-                if (sizeAnomalyCount > 0) parts.push(`${sizeAnomalyCount} size anomalies`);
-                
-                let updateMsg = '';
-                if (weightUpdatedCount > 0) updateMsg += `${weightUpdatedCount} weights updated. `;
-                if (skippedUnframedCount > 0) updateMsg += `${skippedUnframedCount} unframed items skipped.`;
+                    let parts = [`Highlighted: ${totalHighlighted} total`];
+                    if (multiOrderCount > 0) parts.push(`${multiOrderCount} orders (>4 products)`);
+                    if (sizeAnomalyCount > 0) parts.push(`${sizeAnomalyCount} size anomalies`);
+                    
+                    let updateMsg = '';
+                    if (weightUpdatedCount > 0) updateMsg += `${weightUpdatedCount} weights updated. `;
+                    if (skippedUnframedCount > 0) updateMsg += `${skippedUnframedCount} unframed items skipped.`;
 
-                let finalMsg = parts.join(', ') + '.';
-                if (updateMsg) finalMsg += ` ${updateMsg}`;
-                
-                setStatus(totalHighlighted > 0 ? finalMsg : 'No anomalies found to highlight.');
+                    let finalMsg = parts.join(', ') + '.';
+                    if (updateMsg) finalMsg += ` ${updateMsg}`;
+                    
+                    setStatus(totalHighlighted > 0 ? finalMsg : 'No anomalies found to highlight.');
+                }
             }
         }
     } else if (chrome.runtime.lastError) {

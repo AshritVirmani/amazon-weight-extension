@@ -310,11 +310,18 @@ async function updateFieldsNearTitle(titleElement, weightValue, dimensions) {
 
 /**
  * Main function to handle highlighting anomalies.
+ * @param {boolean} isOrdersPage - If true, uses simpler price-based logic for orders page.
  * @returns {object} A result object with counts of highlighted anomalies.
  */
 async function handleHighlightAnomalies(isOrdersPage = false) {
     clearAllHighlights();
 
+    // ORDERS PAGE: Simple price-based scanning (price > ₹450)
+    if (isOrdersPage) {
+        return await handleOrdersPriceScanning();
+    }
+
+    // SHIPMENTS PAGE: Complex multi-order and size anomaly detection
     // Start by finding all product titles, as they are a reliable entry point.
     const productTitles = findAllElements('span[data-testid="line-item-title"], .myo-list-orders-product-name-cell a');
     if (productTitles.length === 0) {
@@ -401,7 +408,7 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
     let dimensionsUpdatedCount = 0;
     let skippedUnframedCount = 0;
 
-    // Apply highlights and update data if not on the read-only orders page
+    // Apply highlights and update data on the shipments page
     for (const [row, data] of productRows.entries()) {
         const isMultiOrder = multiOrderProducts.has(row);
         const isSizeAnomaly = sizeAnomalyProducts.has(row);
@@ -414,29 +421,12 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
         if (highlightType) {
             highlightRow(row, highlightType);
 
-            // Only update data on the shipments page
-            // Update rules:
-            // 1. Size anomalies (12x18/18x12) - always update (unless unframed/tape)
-            // 2. Multi-order (>4 products) - only update if NOT a size anomaly
-            if (!isOrdersPage) {
-                if (isSizeAnomaly) {
-                    // Size anomalies: update unless unframed/tape
-                    if (data.isUnframed) {
-                        skippedUnframedCount++;
-                    } else {
-                        // Try updating via product row first
-                        let result = await updateProductFields(row);
-                        // If that didn't work, try finding fields near the title
-                        if ((!result.weightUpdated || result.dimensionsUpdated < 2) && data.titleElement) {
-                            const titleResult = await updateFieldsNearTitle(data.titleElement, '890', { length: '50', width: '30', height: '2.9' });
-                            if (titleResult.weightUpdated) result.weightUpdated = true;
-                            result.dimensionsUpdated = Math.max(result.dimensionsUpdated, titleResult.dimensionsUpdated);
-                        }
-                        if (result.weightUpdated) weightUpdatedCount++;
-                        dimensionsUpdatedCount += result.dimensionsUpdated;
-                    }
-                } else if (isMultiOrder) {
-                    // Multi-order (>4 products) without size anomaly: update weights/dimensions
+            if (isSizeAnomaly) {
+                // Size anomalies: update unless unframed/tape
+                if (data.isUnframed) {
+                    skippedUnframedCount++;
+                } else {
+                    // Try updating via product row first
                     let result = await updateProductFields(row);
                     // If that didn't work, try finding fields near the title
                     if ((!result.weightUpdated || result.dimensionsUpdated < 2) && data.titleElement) {
@@ -447,6 +437,17 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
                     if (result.weightUpdated) weightUpdatedCount++;
                     dimensionsUpdatedCount += result.dimensionsUpdated;
                 }
+            } else if (isMultiOrder) {
+                // Multi-order (>4 products) without size anomaly: update weights/dimensions
+                let result = await updateProductFields(row);
+                // If that didn't work, try finding fields near the title
+                if ((!result.weightUpdated || result.dimensionsUpdated < 2) && data.titleElement) {
+                    const titleResult = await updateFieldsNearTitle(data.titleElement, '890', { length: '50', width: '30', height: '2.9' });
+                    if (titleResult.weightUpdated) result.weightUpdated = true;
+                    result.dimensionsUpdated = Math.max(result.dimensionsUpdated, titleResult.dimensionsUpdated);
+                }
+                if (result.weightUpdated) weightUpdatedCount++;
+                dimensionsUpdatedCount += result.dimensionsUpdated;
             }
         }
     }
@@ -480,5 +481,52 @@ async function handleHighlightAnomalies(isOrdersPage = false) {
         weightUpdatedCount,
         dimensionsUpdatedCount,
         skippedUnframedCount
+    };
+}
+
+/**
+ * Simplified price-based scanning for orders page.
+ * Highlights products with individual price > ₹450.
+ * @returns {object} A result object with counts.
+ */
+async function handleOrdersPriceScanning() {
+    const priceThreshold = 450;
+    let highlightedCount = 0;
+    
+    // Find all price elements - look for "Item subtotal" or similar text
+    const allElements = document.querySelectorAll('div, span, td');
+    const productRows = new Set();
+    
+    for (const element of allElements) {
+        const text = (element.textContent || '').trim();
+        
+        // Look for "Item subtotal: ₹599.00" pattern or similar price indicators
+        if (text.includes('Item subtotal') || text.includes('item subtotal')) {
+            // Extract price from the text
+            const priceMatch = text.match(/₹\s*[\d,]+(?:\.\d{2})?/);
+            if (priceMatch) {
+                const priceStr = priceMatch[0].replace(/[₹,\s]/g, '');
+                const price = parseFloat(priceStr);
+                
+                if (price > priceThreshold) {
+                    // Find the parent product row
+                    const productRow = findProductRow(element);
+                    if (productRow && !productRows.has(productRow)) {
+                        productRows.add(productRow);
+                        highlightRow(productRow, 'high-price');
+                        highlightedCount++;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (highlightedCount === 0) {
+        return { error: `No products found with price > ₹${priceThreshold}.` };
+    }
+    
+    return { 
+        totalHighlighted: highlightedCount,
+        priceThreshold: priceThreshold
     };
 }
